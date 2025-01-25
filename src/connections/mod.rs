@@ -1,4 +1,5 @@
 pub mod serial;
+pub mod telnet;
 pub mod connection;
 pub mod errors;
 

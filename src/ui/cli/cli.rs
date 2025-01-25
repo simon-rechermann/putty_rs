@@ -1,11 +1,14 @@
 use clap::Parser;
+use std::net::Ipv4Addr;
 use log::info;
 use std::io::{self, Read};
 use std::os::unix::io::AsRawFd;
 
 use termios::*;
+use crate::connections::ConnectionType; 
 use crate::connections::errors::ConnectionError;
 use crate::connections::serial::SerialConnection;
+use crate::connections::telnet::TelnetConnection;
 use crate::core::connection_manager::{ConnectionManager, ConnectionHandle};
 
 /// Put stdin into raw mode so we read each keystroke immediately.
@@ -37,6 +40,8 @@ pub struct Args {
     /// Launch in GUI mode
     #[arg(long)]
     pub gui: bool,
+    #[arg(long, default_value = "Telnet")]
+    pub connection_type: ConnectionType,
     #[arg(long, default_value = "/dev/pts/3")]
     pub port: Option<String>,
     #[arg(long, default_value_t = 115200)]
@@ -44,68 +49,79 @@ pub struct Args {
 }
 
 pub fn run_cli(args: Args) -> Result<(), ConnectionError> {
+    // 1) Create a Session to manage one or more connections
+    let connection_manager = ConnectionManager::new();
 
-    if let Some(port) = args.port {
-        eprintln!("Opening serial port: {} at {} baud", port, args.baud);
+    match args.connection_type {
+        ConnectionType::Serial => {
+            if let Some(port) = args.port {
+                eprintln!("Opening telent port: {} at {} baud", port, args.baud);
 
-        // 1) Create a Session to manage one or more connections
-        let connection_manager = ConnectionManager::new();
 
-        // 2) Build a SerialConnection
-        let conn = SerialConnection::new(port.clone(), args.baud);
+                // 2) Build a SerialConnection
+                let conn = SerialConnection::new(port.clone(), args.baud);
 
-        // 3) Provide a callback for incoming bytes
-        let on_byte = move |byte: u8| {
-            // We ignore '_conn_id' here because currently we only have one connection in CLI
-            if byte == b'\r' {
-                print!("\r");
+                // 3) Provide a callback for incoming bytes
+                let on_byte = move |byte: u8| {
+                    // We ignore '_conn_id' here because currently we only have one connection in CLI
+                    if byte == b'\r' {
+                        print!("\r");
+                    } else {
+                        print!("{}", byte as char);
+                    }
+                };
+
+                // 4) Add the connection to the Session
+                let handle: ConnectionHandle = connection_manager.add_connection(port.clone(), Box::new(conn), on_byte)?;
             } else {
-                print!("{}", byte as char);
-            }
-        };
-
-        // 4) Add the connection to the Session
-        let handle: ConnectionHandle = connection_manager.add_connection(port.clone(), Box::new(conn), on_byte)?;
-
-        // Put terminal in raw mode
-        let original_mode = set_raw_mode()?;
-        eprintln!("Raw mode enabled. Press Ctrl+A then 'x' to exit.");
-
-        let mut last_was_ctrl_a = false;
-        let mut buf = [0u8; 1];
-
-        // 5) Main loop reading from stdin, sending each char to the connection
-        while io::stdin().read(&mut buf).is_ok() {
-            let ch = buf[0];
-
-            if ch == 0x01 {
-                last_was_ctrl_a = true;
-                continue;
-            }
-            if last_was_ctrl_a && ch == b'x' {
-                info!("Exiting...");
-                break;
-            } else {
-                last_was_ctrl_a = false;
-            }
-
-            if ch == b'\r' {
-                // Convert carriage return to newline if wanted here
-                let _ = handle.write_bytes(b"\r");
-            } else {
-                let _ = handle.write_bytes(&[ch]);
-            }
+                eprintln!("No --port argument provided.");
+                eprintln!("Usage: putty_rs --port /dev/ttyUSB0 --baud 115200");
+    }
         }
+        ConnectionType::Telnet => {
+            let conn: TelnetConnection = TelnetConnection::new(Ipv4Addr::new("127.0.0.1"));
+        }
+
+        ConnectionType::SSH => {
+            todo!()
+        }
+    }
+
+    // Put terminal in raw mode
+    let original_mode = set_raw_mode()?;
+    eprintln!("Raw mode enabled. Press Ctrl+A then 'x' to exit.");
+
+    let mut last_was_ctrl_a = false;
+    let mut buf = [0u8; 1];
+
+    // 5) Main loop reading from stdin, sending each char to the connection
+    while io::stdin().read(&mut buf).is_ok() {
+        let ch = buf[0];
+
+        if ch == 0x01 {
+            last_was_ctrl_a = true;
+            continue;
+        }
+        if last_was_ctrl_a && ch == b'x' {
+            info!("Exiting...");
+            break;
+        } else {
+            last_was_ctrl_a = false;
+        }
+
+        if ch == b'\r' {
+            // Convert carriage return to newline if wanted here
+            let _ = handle.write_bytes(b"\r");
+        } else {
+            let _ = handle.write_bytes(&[ch]);
+        }
+    }
 
         // 6) Stop the connection & restore terminal mode
         let _ = handle.stop();
         restore_mode(original_mode);
         eprintln!("Terminal mode restored.");
 
-    } else {
-        eprintln!("No --port argument provided.");
-        eprintln!("Usage: putty_rs --port /dev/ttyUSB0 --baud 115200");
-    }
 
     Ok(())
 }
