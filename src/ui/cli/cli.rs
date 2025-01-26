@@ -57,7 +57,6 @@ pub fn run_cli(args: Args) -> Result<(), ConnectionError> {
             if let Some(port) = args.port {
                 eprintln!("Opening telent port: {} at {} baud", port, args.baud);
 
-
                 // 2) Build a SerialConnection
                 let conn = SerialConnection::new(port.clone(), args.baud);
 
@@ -79,7 +78,7 @@ pub fn run_cli(args: Args) -> Result<(), ConnectionError> {
     }
         }
         ConnectionType::Telnet => {
-            let conn: TelnetConnection = TelnetConnection::new(Ipv4Addr::new("127.0.0.1"));
+            let conn: TelnetConnection = TelnetConnection::new(Ipv4Addr::new(127, 0,0,1));
         }
 
         ConnectionType::SSH => {
