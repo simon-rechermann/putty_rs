@@ -1,26 +1,26 @@
 use log::{info, error};
 use std::net::Ipv4Addr;
-use std::io::{self, Write, Read}; // Add this to your imports
+use std::io::{Write, Read}; // Add this to your imports
 use std::net::TcpStream;
 
 use crate::connections::{Connection, ConnectionError};
 
 #[derive(Debug)]
 pub struct TelnetConnection {
-    address: Ipv4Addr,
-    port: u32,
+    address: Ipv4Addr, // TODO also enable domain names
+    port: u16,
     inner: Option<Box<TcpStream>>,
 }
 
 impl TelnetConnection {
-    pub fn new(address: Ipv4Addr, port: u32) -> Self {
+    pub fn new(address: Ipv4Addr, port: u16) -> Self {
         TelnetConnection {
             address,
             port,
             inner: None
         }
     }
-    /// Escapes IAC (255) bytes in the data, as required by the Telnet protocol.
+    /// Escapes IAC (255) bytes in the data by doubling it, as required by the Telnet protocol.
     fn escape_iac(data: &[u8]) -> Vec<u8> {
         let mut escaped = Vec::new();
         for &byte in data {
@@ -61,7 +61,7 @@ impl Connection for TelnetConnection {
     fn write(&mut self, data: &[u8]) -> Result<usize, ConnectionError> {
         if let Some(ref mut stream) = self.inner {
             // Telnet requires escaping special characters, like the IAC byte (255).
-            let escaped_data = TelnetConnection::escape_iac(data.as_bytes());
+            let escaped_data = TelnetConnection::escape_iac(data);
 
             // Write escaped data to the stream
             stream.write_all(&escaped_data)?;

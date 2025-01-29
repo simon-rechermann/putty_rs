@@ -1,5 +1,5 @@
 use super::errors::ConnectionError;
-use clap::{ValueEnum};
+use clap::ValueEnum;
 
 
 /// A trait representing a generic connection (serial, SSH, etc.).
@@ -12,7 +12,7 @@ pub trait Connection {
 }
 
 // enum used for UI
-#[derive(Debug, ValueEnum)]
+#[derive(Debug, ValueEnum, Clone)]
 pub enum ConnectionType {
     Serial,
     Telnet,
