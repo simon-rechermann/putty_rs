@@ -1,3 +1,4 @@
+use log::{debug, error, info};
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::sync::{
@@ -6,7 +7,6 @@ use std::sync::{
 };
 use std::thread;
 use std::time::Duration;
-use log::{debug, error, info};
 
 use crate::connections::connection::Connection;
 use crate::connections::errors::ConnectionError;
@@ -28,7 +28,7 @@ struct ConnectionIOThread {
 /// A handle to one specific connection, so the caller can write or stop it.
 #[derive(Clone)]
 pub struct ConnectionHandle {
-    session: ConnectionManager,
+    connection_manager: ConnectionManager,
     id: String,
 }
 
@@ -131,7 +131,7 @@ impl ConnectionManager {
 
         // 5) Return a handle
         Ok(ConnectionHandle {
-            session: self.clone(),
+            connection_manager: self.clone(),
             id,
         })
     }
@@ -146,7 +146,10 @@ impl ConnectionManager {
                 .map_err(|_| ConnectionError::Other("Channel closed".into()))?;
             Ok(data.len())
         } else {
-            Err(ConnectionError::Other(format!("No connection with id '{}'", id)))
+            Err(ConnectionError::Other(format!(
+                "No connection with id '{}'",
+                id
+            )))
         }
     }
 
@@ -160,7 +163,10 @@ impl ConnectionManager {
             }
             Ok(())
         } else {
-            Err(ConnectionError::Other(format!("No connection with id '{}'", id)))
+            Err(ConnectionError::Other(format!(
+                "No connection with id '{}'",
+                id
+            )))
         }
     }
 }
@@ -170,11 +176,83 @@ impl ConnectionManager {
 impl ConnectionHandle {
     /// Writes data to *this* connection.
     pub fn write_bytes(&self, data: &[u8]) -> Result<usize, ConnectionError> {
-        self.session.write_bytes(&self.id, data)
+        self.connection_manager.write_bytes(&self.id, data)
     }
 
     /// Stops *this* connection.
     pub fn stop(self) -> Result<(), ConnectionError> {
-        self.session.stop_connection(&self.id)
+        self.connection_manager.stop_connection(&self.id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::connections::connection::Connection;
+
+    /// A simple mock `Connection` to test `ConnectionManager` logic without a real serial port.
+    struct MockConnection {
+        connected: bool,
+        read_buffer: Vec<u8>,
+        write_buffer: Vec<u8>,
+    }
+
+    impl MockConnection {
+        fn new() -> Self {
+            MockConnection {
+                connected: false,
+                read_buffer: vec![],
+                write_buffer: vec![],
+            }
+        }
+    }
+
+    impl Connection for MockConnection {
+        fn connect(&mut self) -> Result<(), ConnectionError> {
+            self.connected = true;
+            Ok(())
+        }
+
+        fn disconnect(&mut self) -> Result<(), ConnectionError> {
+            self.connected = false;
+            Ok(())
+        }
+
+        fn write(&mut self, data: &[u8]) -> Result<usize, ConnectionError> {
+            if !self.connected {
+                return Err(ConnectionError::Other("Not connected".into()));
+            }
+            self.write_buffer.extend_from_slice(data);
+            Ok(data.len())
+        }
+
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, ConnectionError> {
+            if !self.connected {
+                return Err(ConnectionError::Other("Not connected".into()));
+            }
+            let n = self.read_buffer.len().min(buffer.len());
+            buffer[..n].copy_from_slice(&self.read_buffer[..n]);
+            self.read_buffer.drain(..n);
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn test_write_and_stop() {
+        let manager = ConnectionManager::new();
+        let mock_connection = Box::new(MockConnection::new());
+        let on_byte = |_byte: u8| {};
+
+        let handle = manager
+            .add_connection("mock".to_string(), mock_connection, on_byte)
+            .expect("Failed to add mock connection");
+
+        // Try writing
+        let bytes_written = handle.write_bytes(b"Hello").unwrap();
+        assert_eq!(bytes_written, 5);
+
+        // Stop connection
+        let result = handle.stop();
+        assert!(result.is_ok(), "Stopping the connection should succeed");
     }
 }

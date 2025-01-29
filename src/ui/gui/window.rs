@@ -1,21 +1,19 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use log::{info, error};
 use eframe;
 use eframe::egui;
+use log::{error, info};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-use crate::ui::cli::cli::Args;
 use crate::connections::serial::SerialConnection;
-use crate::core::connection_manager::{ConnectionManager, ConnectionHandle};
+use crate::core::connection_manager::{ConnectionHandle, ConnectionManager};
+use crate::ui::cli::cli_commands::Args;
 
 pub fn launch_gui(args: Args) -> eframe::Result<()> {
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
         "putty_rs GUI",
         native_options,
-        Box::new(|_cc| {
-            Ok(Box::new(MyGuiApp::new(args.port, args.baud)))
-        }),
+        Box::new(|_cc| Ok(Box::new(MyGuiApp::new(args.port, args.baud)))),
     )
 }
 
@@ -76,7 +74,10 @@ impl eframe::App for MyGuiApp {
             ui.separator();
 
             // Show how many connections are active
-            ui.label(format!("Active connections: {}", self.connection_handles.len()));
+            ui.label(format!(
+                "Active connections: {}",
+                self.connection_handles.len()
+            ));
 
             // Output area
             ui.label("Terminal Output (all connections):");
@@ -155,8 +156,11 @@ impl MyGuiApp {
         };
 
         // Add it to the connection manager
-        match self.connection_manager.add_connection(self.port.clone(), Box::new(connection), on_byte)
-        {
+        match self.connection_manager.add_connection(
+            self.port.clone(),
+            Box::new(connection),
+            on_byte,
+        ) {
             Ok(handle) => {
                 // Store the handle in our HashMap
                 self.connection_handles.insert(self.port.clone(), handle);

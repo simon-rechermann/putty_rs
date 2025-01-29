@@ -1,6 +1,6 @@
+use log::{error, info};
 use serialport::SerialPort;
 use std::time::Duration;
-use log::{info, error};
 
 use crate::connections::{Connection, ConnectionError};
 
