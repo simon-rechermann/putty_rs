@@ -33,18 +33,20 @@ pub struct Args {
 
     /// Serial port to open (default on UNIX: `/dev/pts/3`)
     /// If you're on Windows, you might specify something like `COM3`.
-    #[arg(long, default_value = "/dev/pts/3")]
+    #[arg(long)]
     pub port: Option<String>,
 
     #[arg(long, default_value_t = 115200)]
     pub baud: u32,
 
-    #[arg(long, default_value = "Telnet")]
+    #[arg(long)]
     pub connection_type: ConnectionType,
+
+    #[arg(long)]
+    pub address: Option<String>,
 }
 
 pub fn run_cli(args: Args) -> Result<(), ConnectionError> {
-
     match args.connection_type {
         ConnectionType::Serial => {
             if let Some(port) = args.port {
@@ -116,13 +118,13 @@ pub fn run_cli(args: Args) -> Result<(), ConnectionError> {
             }
         }
         ConnectionType::Telnet => {
-            if let Some(port) = args.port {
-                info!("Opening serial port: {} at {} baud", port, args.baud);
-                // parse port for later use
-                let port_u16: u16 = port.parse().expect("Port for Telnet cannot be parsed.");
+            if let Some(address) = args.address {
+                info!("Opening telnet connection to {:?}", address);
                 // Create a ConnectionManager to manage one or more connections
                 let connection_manager = ConnectionManager::new();
-                let conn: TelnetConnection = TelnetConnection::new(Ipv4Addr::new(127, 0,0,1), port_u16);
+                info!("Connecting to address {}", address);
+
+                let conn: TelnetConnection = TelnetConnection::new(address);
 
                 // Provide a callback for incoming bytes
                 //    In this example, we simply print them to stdout.
@@ -136,12 +138,12 @@ pub fn run_cli(args: Args) -> Result<(), ConnectionError> {
                 };
 
                 // 4) Add the connection to the Session
-                let _handle: ConnectionHandle = connection_manager.add_connection(port, Box::new(conn), on_byte)?;
+                let _handle: ConnectionHandle = connection_manager.add_connection( format!("{:?}",args.connection_type), Box::new(conn), on_byte)?;
                 // TODO continue point 4 and try it out
                 todo!();
 
             } else {
-                eprintln!("No --port argument for Telnet provided.");
+                eprintln!("No all arguments for Telnet provided/valid.");
             }
 
         }
