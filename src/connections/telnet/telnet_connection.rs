@@ -1,5 +1,4 @@
 use log::{info, error};
-use std::fmt::format;
 use std::io::{Write, Read}; // Add this to your imports
 use std::net::TcpStream;
 
@@ -8,13 +7,15 @@ use crate::connections::{Connection, ConnectionError};
 #[derive(Debug)]
 pub struct TelnetConnection {
     address: String, 
+    port: String,
     inner: Option<Box<TcpStream>>,
 }
 
 impl TelnetConnection {
-    pub fn new(address: String) -> Self {
+    pub fn new(address: String, port: String) -> Self {
         TelnetConnection {
             address,
+            port,
             inner: None
         }
     }
@@ -36,13 +37,15 @@ impl Connection for TelnetConnection {
     fn connect(&mut self) -> Result<(), ConnectionError> {
         info!("Attempting to establish a TCP connection to: {}", self.address);
 
-        let address_with_socket: String = format!("{}:{}", self.address, 23);
-        let stream = TcpStream::connect(address_with_socket)?;
-
-        info!("Successfully established a TCP connection to : {}", self.address);
-
-        self.inner = Some(Box::new(stream));
-        Ok(())
+        let address_with_socket = format!("{}:{}", self.address, self.port);
+        if let Ok(stream) = TcpStream::connect(&address_with_socket) {
+            info!("Successfully established a TCP connection to : {}", self.address);
+            self.inner = Some(Box::new(stream));
+            Ok(())
+        } else {
+            error!("Could not establish Telnet connection!");
+            Err(ConnectionError::Other("Not connected".into()))
+        }
     }
 
     fn disconnect(&mut self) -> Result<(), ConnectionError> {

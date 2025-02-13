@@ -1,7 +1,6 @@
 use clap::Parser;
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use log::{info};
-use std::net::Ipv4Addr;
 use std::io::{self, Read};
 
 use crate::connections::errors::ConnectionError;
@@ -118,13 +117,13 @@ pub fn run_cli(args: Args) -> Result<(), ConnectionError> {
             }
         }
         ConnectionType::Telnet => {
-            if let Some(address) = args.address {
+            if let (Some(address), Some(port)) = (args.address, args.port) {
                 info!("Opening telnet connection to {:?}", address);
                 // Create a ConnectionManager to manage one or more connections
                 let connection_manager = ConnectionManager::new();
                 info!("Connecting to address {}", address);
 
-                let conn: TelnetConnection = TelnetConnection::new(address);
+                let conn: TelnetConnection = TelnetConnection::new(address, port);
 
                 // Provide a callback for incoming bytes
                 //    In this example, we simply print them to stdout.
@@ -139,7 +138,7 @@ pub fn run_cli(args: Args) -> Result<(), ConnectionError> {
 
                 // 4) Add the connection to the Session
                 let _handle: ConnectionHandle = connection_manager.add_connection( format!("{:?}",args.connection_type), Box::new(conn), on_byte)?;
-                // TODO continue point 4 and try it out
+                // TODO continue point 4 and try it out use ----> telehack.com:23
                 todo!();
 
             } else {
